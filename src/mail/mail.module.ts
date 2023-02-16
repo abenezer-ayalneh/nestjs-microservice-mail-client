@@ -1,34 +1,43 @@
 import { MailerModule } from '@nestjs-modules/mailer';
-import { Module } from '@nestjs/common';
-import { join } from 'path';
-import { MailService } from './mail.service';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
+import { BullModule } from '@nestjs/bull';
+import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { join } from 'path';
+import { MailConsumer } from './mail.consumer';
+import { MailService } from './mail.service';
 
 @Module({
   imports: [
-    // TODO use it with async for the config
-    MailerModule.forRoot({
-      transport: {
-        host: 'smtp.example.com',
-        secure: false,
-        auth: {
-          user: 'user@example.com',
-          pass: 'topsecret',
+    BullModule.registerQueue({
+      name: 'mail-queue',
+    }),
+    MailerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: async (config: ConfigService) => ({
+        transport: {
+          host: config.get('MAILTRAP_HOST'),
+          port: config.get('MAILTRAP_PORT'),
+          secure: false,
+          auth: {
+            user: config.get('MAILTRAP_USER'),
+            pass: config.get('MAILTRAP_PASSWORD'),
+          },
         },
-      },
-      defaults: {
-        from: '"No Reply" <noreply@example.com>',
-      },
-      template: {
-        dir: join(__dirname, 'templates'),
-        adapter: new HandlebarsAdapter(), // or new PugAdapter() or new EjsAdapter()
-        options: {
-          strict: true,
+        defaults: {
+          from: '"No Reply" <noreply@example.com>',
         },
-      },
+        template: {
+          dir: join(__dirname, 'templates'),
+          adapter: new HandlebarsAdapter(), // or new PugAdapter() or new EjsAdapter()
+          options: {
+            strict: true,
+          },
+        },
+      }),
     }),
   ],
-  providers: [MailService],
+  providers: [MailService, MailConsumer],
   exports: [MailService],
 })
 export class MailModule {}
